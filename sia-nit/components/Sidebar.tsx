@@ -8,6 +8,7 @@ import {
   LayoutDashboard,
   FolderKanban,
   ClipboardList,
+  Users,
   Sparkles,
   LogOut,
   Shield,
@@ -19,6 +20,7 @@ const navItems = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/projetos", label: "Projetos", icon: FolderKanban },
   { href: "/demandas", label: "Demandas", icon: ClipboardList },
+  { href: "/pesquisadores", label: "Pesquisadores", icon: Users },
   { href: "/recomendacao", label: "Recomendação IA", icon: Sparkles },
 ];
 

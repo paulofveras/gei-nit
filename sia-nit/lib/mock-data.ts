@@ -36,6 +36,18 @@ export interface Recomendacao {
   feedbackComentario: string;
 }
 
+export interface Pesquisador {
+  id: string;
+  nome: string;
+  email: string;
+  orcid: string;
+  link_lattes: string;
+  areas: string[];
+  projetos: string[]; // IDs de Projeto.id
+  consentimento_lgpd: boolean;
+  ativo: boolean;
+}
+
 export const projetos: Projeto[] = [
   {
     id: "p1",
@@ -293,4 +305,62 @@ export const areasDemandadas = [
   { area: "Auditoria / NLP", quantidade: 4 },
   { area: "Educação / EAD", quantidade: 3 },
   { area: "Energia Renovável", quantidade: 2 },
+];
+
+export const pesquisadores: Pesquisador[] = [
+  {
+    id: "res1",
+    nome: "Dr. Renato Alves",
+    email: "renato.alves@unitins.edu.br",
+    orcid: "0000-0002-1234-5678",
+    link_lattes: "http://lattes.cnpq.br/1234567890",
+    areas: ["Ciência da Computação", "IoT", "Machine Learning"],
+    projetos: ["p1"],
+    consentimento_lgpd: true,
+    ativo: true,
+  },
+  {
+    id: "res2",
+    nome: "Dra. Lúcia Mendes",
+    email: "lucia.mendes@unitins.edu.br",
+    orcid: "0000-0003-8765-4321",
+    link_lattes: "http://lattes.cnpq.br/9876543210",
+    areas: ["Engenharia de Produção", "Blockchain", "Agronegócio"],
+    projetos: ["p2"],
+    consentimento_lgpd: true,
+    ativo: true,
+  },
+  {
+    id: "res3",
+    nome: "Dr. Tiago Barbosa",
+    email: "tiago.barbosa@unitins.edu.br",
+    orcid: "0000-0001-2345-6789",
+    link_lattes: "http://lattes.cnpq.br/1357924680",
+    areas: ["Medicina", "Saúde Digital", "Telemedicina"],
+    projetos: ["p3"],
+    consentimento_lgpd: false,
+    ativo: true,
+  },
+  {
+    id: "res4",
+    nome: "Dr. Carlos Pinheiro",
+    email: "carlos.pinheiro@unitins.edu.br",
+    orcid: "0000-0002-9876-5432",
+    link_lattes: "http://lattes.cnpq.br/2468013579",
+    areas: ["Agronomia", "Visão Computacional", "Engenharia Agrícola"],
+    projetos: ["p4", "p6"],
+    consentimento_lgpd: true,
+    ativo: true,
+  },
+  {
+    id: "res5",
+    nome: "Dr. Sérgio Oliveira",
+    email: "sergio.oliveira@unitins.edu.br",
+    orcid: "0000-0003-1357-2468",
+    link_lattes: "http://lattes.cnpq.br/1111222233",
+    areas: ["Ciência da Computação", "NLP", "Auditoria Digital"],
+    projetos: ["p7"],
+    consentimento_lgpd: true,
+    ativo: false,
+  },
 ];

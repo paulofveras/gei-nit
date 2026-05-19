@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useAuth } from "@/lib/auth-context";
 import { projetos as projetosIniciais, Projeto, Status } from "@/lib/mock-data";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -46,6 +47,7 @@ const KEYWORDS_BY_AREA: Record<string, string> = {
 };
 
 export default function ProjetosPage() {
+  const { user } = useAuth();
   const [projetos, setProjetos] = useState<Projeto[]>(projetosIniciais);
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
@@ -133,7 +135,12 @@ export default function ProjetosPage() {
     setUploading(false);
   }
 
-  const filtered = projetos.filter(
+  const visiveis =
+    user?.perfil === "admin_NIT"
+      ? projetos
+      : projetos.filter((p) => p.nivelSigilo !== "confidencial");
+
+  const filtered = visiveis.filter(
     (p) =>
       p.titulo.toLowerCase().includes(search.toLowerCase()) ||
       p.areaCNPq.toLowerCase().includes(search.toLowerCase()) ||
@@ -151,14 +158,23 @@ export default function ProjetosPage() {
       >
         <div>
           <h1 className="text-[22px] font-semibold tracking-tight text-zinc-900">Projetos Acadêmicos</h1>
-          <p className="text-zinc-400 text-sm mt-0.5">{projetos.length} projetos cadastrados</p>
+          <p className="text-zinc-400 text-sm mt-0.5">
+            {visiveis.length} projetos cadastrados
+            {user?.perfil !== "admin_NIT" && projetos.length > visiveis.length && (
+              <span className="ml-1.5 text-[11px] text-amber-600">
+                · {projetos.length - visiveis.length} confidencial{projetos.length - visiveis.length > 1 ? "is" : ""} oculto{projetos.length - visiveis.length > 1 ? "s" : ""}
+              </span>
+            )}
+          </p>
         </div>
-        <Button
-          onClick={openNovo}
-          className="gap-2 bg-blue-600 hover:bg-blue-500 text-white shadow-sm shadow-blue-500/30"
-        >
-          <Plus className="h-4 w-4" /> Novo Projeto
-        </Button>
+        {user?.perfil === "admin_NIT" && (
+          <Button
+            onClick={openNovo}
+            className="gap-2 bg-blue-600 hover:bg-blue-500 text-white shadow-sm shadow-blue-500/30"
+          >
+            <Plus className="h-4 w-4" /> Novo Projeto
+          </Button>
+        )}
       </motion.div>
 
       {/* Search */}

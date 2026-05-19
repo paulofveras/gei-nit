@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useAuth } from "@/lib/auth-context";
 import {
   pesquisadores as pesquisadoresIniciais,
   projetos as todosProjetos,
@@ -72,6 +73,7 @@ function pesquisadorParaForm(p: Pesquisador): FormState {
 }
 
 export default function PesquisadoresPage() {
+  const { user } = useAuth();
   const [lista, setLista] = useState<Pesquisador[]>(pesquisadoresIniciais);
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
@@ -150,12 +152,14 @@ export default function PesquisadoresPage() {
             {lista.length} pesquisadores cadastrados
           </p>
         </div>
-        <Button
-          onClick={abrirNovo}
-          className="gap-2 bg-blue-600 hover:bg-blue-500 text-white shadow-sm shadow-blue-500/30"
-        >
-          <Plus className="h-4 w-4" /> Novo Pesquisador
-        </Button>
+        {user?.perfil === "admin_NIT" && (
+          <Button
+            onClick={abrirNovo}
+            className="gap-2 bg-blue-600 hover:bg-blue-500 text-white shadow-sm shadow-blue-500/30"
+          >
+            <Plus className="h-4 w-4" /> Novo Pesquisador
+          </Button>
+        )}
       </motion.div>
 
       {/* Search */}
@@ -298,7 +302,7 @@ export default function PesquisadoresPage() {
                   ) : (
                     <div className="space-y-0.5">
                       <p
-                        className="text-[12px] text-zinc-600 leading-tight max-w-[160px] truncate"
+                        className="text-[12px] text-zinc-600 leading-tight max-w-40 truncate"
                         title={tituloProjeto(p.projetos[0])}
                       >
                         {tituloProjeto(p.projetos[0])}

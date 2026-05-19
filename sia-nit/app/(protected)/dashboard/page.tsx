@@ -1,6 +1,13 @@
 "use client";
 
-import { kpis, areasDemandadas } from "@/lib/mock-data";
+import { useMemo } from "react";
+import {
+  kpis,
+  areasDemandadas,
+  recomendacoesMock,
+  demandas,
+  Projeto,
+} from "@/lib/mock-data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { motion, staggerContainer, staggerItem } from "@/components/ui/motion";
 import {
@@ -11,6 +18,8 @@ import {
   ThumbsUp,
   Sparkles,
   Zap,
+  Trophy,
+  Cloud,
 } from "lucide-react";
 import {
   BarChart,
@@ -88,7 +97,67 @@ const kpiCards = [
   },
 ];
 
+const STOPWORDS = new Set([
+  "para","pelo","pela","pelos","pelas","como","sobre","entre","sem","com","por","mais","menos","muito","pouco","todo","todos","toda","todas","este","esta","estes","estas","esse","essa","esses","essas","aquele","aquela","aqueles","aquelas","isso","isto","aquilo","sua","seu","suas","seus","nossa","nosso","nossas","nossos","também","então","ainda","apenas","mesmo","mesma","mesmos","mesmas","precisamos","precisa","busca","buscamos","somos","temos","queremos","devemos","podemos","estar","estão","pode","podem","foram","será","serão","sera","agora","antes","depois","sempre","nunca","cada","qualquer","durante","através","mediante","perante","conforme","segundo","enquanto","quando","onde","porque","porquê","quais","quanto","quantos","forma","formas","tempo","real","objetivo","maior","menor","baixa","alta","alto","representa","representam","tocantins","tocantinense","crítico","crítica","existe","existem","ainda","caso","casos","outro","outra","outros","outras","além","aqui","ali","cada","atendimento","milhões","milhão","reais"
+]);
+
+const TOP5_COLORS = [
+  "bg-amber-500 text-white",
+  "bg-zinc-400 text-white",
+  "bg-orange-700 text-white",
+  "bg-zinc-300 text-zinc-700",
+  "bg-zinc-300 text-zinc-700",
+];
+
+interface Top5Entry {
+  projeto: Projeto;
+  count: number;
+  avgScore: number;
+}
+
+interface WordcloudEntry {
+  text: string;
+  count: number;
+  scale: number;
+}
+
 export default function DashboardPage() {
+  const top5: Top5Entry[] = useMemo(() => {
+    const stats = new Map<string, { projeto: Projeto; count: number; sumScore: number }>();
+    Object.values(recomendacoesMock).flat().forEach((rec) => {
+      const cur = stats.get(rec.projeto.id) ?? { projeto: rec.projeto, count: 0, sumScore: 0 };
+      cur.count += 1;
+      cur.sumScore += rec.scoreIA;
+      stats.set(rec.projeto.id, cur);
+    });
+    return Array.from(stats.values())
+      .map((s) => ({ projeto: s.projeto, count: s.count, avgScore: s.sumScore / s.count }))
+      .sort((a, b) => b.count - a.count || b.avgScore - a.avgScore)
+      .slice(0, 5);
+  }, []);
+
+  const wordcloud: WordcloudEntry[] = useMemo(() => {
+    const texto = demandas
+      .map((d) => `${d.descricao} ${d.areaCNPq ?? ""}`)
+      .join(" ")
+      .toLowerCase()
+      .replace(/[.,;:()\/\-"'!?\d%]/g, " ")
+      .replace(/\s+/g, " ");
+    const tokens = texto.split(" ").filter((t) => t.length >= 5 && !STOPWORDS.has(t));
+    const freq = new Map<string, number>();
+    tokens.forEach((t) => freq.set(t, (freq.get(t) ?? 0) + 1));
+    const sorted = Array.from(freq.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 32);
+    const max = sorted[0]?.[1] ?? 1;
+    const min = sorted[sorted.length - 1]?.[1] ?? 1;
+    return sorted.map(([text, count]) => ({
+      text,
+      count,
+      scale: max === min ? 1 : (count - min) / (max - min),
+    }));
+  }, []);
+
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -128,55 +197,171 @@ export default function DashboardPage() {
         ))}
       </motion.div>
 
-      {/* Chart */}
+      {/* Chart + TOP 5 */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+        <motion.div
+          className="lg:col-span-3"
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, delay: 0.2 }}
+        >
+          <Card className="border-zinc-200/60 bg-white shadow-sm h-full">
+            <CardHeader className="pb-1 pt-5 px-6">
+              <CardTitle className="text-[14px] font-semibold text-zinc-900 tracking-tight">
+                Áreas Mais Demandadas pelo Setor Produtivo
+              </CardTitle>
+              <p className="text-xs text-zinc-400 mt-0.5">Demandas externas por área temática</p>
+            </CardHeader>
+            <CardContent className="px-6 pb-5">
+              <ResponsiveContainer width="100%" height={240}>
+                <BarChart data={areasDemandadas} margin={{ top: 8, right: 8, left: -24, bottom: 56 }}>
+                  <XAxis
+                    dataKey="area"
+                    tick={{ fontSize: 11, fill: "#a1a1aa" }}
+                    angle={-32}
+                    textAnchor="end"
+                    interval={0}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    tick={{ fontSize: 11, fill: "#a1a1aa" }}
+                    allowDecimals={false}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      fontSize: 12,
+                      borderRadius: 10,
+                      border: "1px solid #e4e4e7",
+                      boxShadow: "0 4px 16px rgba(0,0,0,.06)",
+                      padding: "8px 12px",
+                    }}
+                    cursor={{ fill: "oklch(0.967 0.003 264 / 50%)" }}
+                    formatter={(v) => [`${v} demandas`, "Quantidade"]}
+                  />
+                  <Bar dataKey="quantidade" radius={[5, 5, 0, 0]} maxBarSize={52}>
+                    {areasDemandadas.map((_, i) => (
+                      <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        {/* TOP 5 projetos mais recomendados */}
+        <motion.div
+          className="lg:col-span-2"
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35, delay: 0.28 }}
+        >
+          <Card className="border-zinc-200/60 bg-white shadow-sm h-full">
+            <CardHeader className="pb-1 pt-5 px-5">
+              <div className="flex items-center gap-2">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-50 shrink-0">
+                  <Trophy className="h-3.5 w-3.5 text-amber-600" />
+                </div>
+                <div>
+                  <CardTitle className="text-[14px] font-semibold text-zinc-900 tracking-tight">
+                    TOP 5 Projetos Recomendados
+                  </CardTitle>
+                  <p className="text-xs text-zinc-400 mt-0.5">Por frequência no pipeline IA</p>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="px-5 pb-5 pt-4">
+              <motion.ol
+                variants={staggerContainer}
+                initial="initial"
+                animate="animate"
+                className="space-y-2.5"
+              >
+                {top5.map((entry, i) => (
+                  <motion.li
+                    key={entry.projeto.id}
+                    variants={staggerItem}
+                    className="group flex items-center gap-3 rounded-xl border border-zinc-200/60 bg-white px-3 py-2.5 hover:border-zinc-300 hover:shadow-sm transition-all"
+                  >
+                    <div className={`flex h-7 w-7 items-center justify-center rounded-lg shrink-0 text-[12px] font-bold ${TOP5_COLORS[i]}`}>
+                      {i + 1}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p
+                        className="text-[12px] font-medium text-zinc-900 leading-tight line-clamp-2"
+                        title={entry.projeto.titulo}
+                      >
+                        {entry.projeto.titulo}
+                      </p>
+                      <p className="text-[10px] text-zinc-400 mt-0.5">
+                        {entry.count}× recomendado · {entry.projeto.areaCNPq}
+                      </p>
+                    </div>
+                    <span className="inline-flex items-center rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-mono font-semibold text-blue-700 shrink-0 tabular-nums">
+                      {(entry.avgScore * 100).toFixed(0)}%
+                    </span>
+                  </motion.li>
+                ))}
+                {top5.length === 0 && (
+                  <li className="text-center py-6 text-[12px] text-zinc-400">
+                    Nenhuma recomendação registrada ainda.
+                  </li>
+                )}
+              </motion.ol>
+            </CardContent>
+          </Card>
+        </motion.div>
+      </div>
+
+      {/* Nuvem de palavras das demandas */}
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.35, delay: 0.2 }}
+        transition={{ duration: 0.35, delay: 0.34 }}
       >
-        <Card className="border-zinc-200/60 bg-white shadow-sm">
+        <Card className="border-zinc-200/60 bg-white shadow-sm overflow-hidden">
           <CardHeader className="pb-1 pt-5 px-6">
-            <CardTitle className="text-[14px] font-semibold text-zinc-900 tracking-tight">
-              Áreas Mais Demandadas pelo Setor Produtivo
-            </CardTitle>
-            <p className="text-xs text-zinc-400 mt-0.5">Demandas externas por área temática</p>
+            <div className="flex items-center gap-2">
+              <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-cyan-50 shrink-0">
+                <Cloud className="h-3.5 w-3.5 text-cyan-600" />
+              </div>
+              <div>
+                <CardTitle className="text-[14px] font-semibold text-zinc-900 tracking-tight">
+                  Temas Recorrentes nas Demandas
+                </CardTitle>
+                <p className="text-xs text-zinc-400 mt-0.5">
+                  Frequência de termos extraídos das {demandas.length} demandas externas registradas
+                </p>
+              </div>
+            </div>
           </CardHeader>
-          <CardContent className="px-6 pb-5">
-            <ResponsiveContainer width="100%" height={240}>
-              <BarChart data={areasDemandadas} margin={{ top: 8, right: 8, left: -24, bottom: 56 }}>
-                <XAxis
-                  dataKey="area"
-                  tick={{ fontSize: 11, fill: "#a1a1aa" }}
-                  angle={-32}
-                  textAnchor="end"
-                  interval={0}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <YAxis
-                  tick={{ fontSize: 11, fill: "#a1a1aa" }}
-                  allowDecimals={false}
-                  axisLine={false}
-                  tickLine={false}
-                />
-                <Tooltip
-                  contentStyle={{
-                    fontSize: 12,
-                    borderRadius: 10,
-                    border: "1px solid #e4e4e7",
-                    boxShadow: "0 4px 16px rgba(0,0,0,.06)",
-                    padding: "8px 12px",
+          <CardContent className="px-6 pb-6">
+            <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 px-4 py-6 min-h-45 bg-linear-to-br from-zinc-50 to-white rounded-xl border border-zinc-200/40">
+              {wordcloud.map((w, i) => (
+                <motion.span
+                  key={w.text}
+                  initial={{ opacity: 0, scale: 0.8 }}
+                  animate={{ opacity: 0.55 + w.scale * 0.45, scale: 1 }}
+                  transition={{ duration: 0.4, delay: 0.02 * i, ease: "easeOut" }}
+                  style={{
+                    fontSize: `${0.875 + w.scale * 1.625}rem`,
+                    color: COLORS[i % COLORS.length],
                   }}
-                  cursor={{ fill: "oklch(0.967 0.003 264 / 50%)" }}
-                  formatter={(v) => [`${v} demandas`, "Quantidade"]}
-                />
-                <Bar dataKey="quantidade" radius={[5, 5, 0, 0]} maxBarSize={52}>
-                  {areasDemandadas.map((_, i) => (
-                    <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+                  className="font-semibold tracking-tight leading-none cursor-default hover:opacity-100 transition-opacity"
+                  title={`"${w.text}" — ${w.count} ocorrência${w.count > 1 ? "s" : ""}`}
+                >
+                  {w.text}
+                </motion.span>
+              ))}
+              {wordcloud.length === 0 && (
+                <p className="text-[12px] text-zinc-400">
+                  Sem termos suficientes para gerar a nuvem.
+                </p>
+              )}
+            </div>
           </CardContent>
         </Card>
       </motion.div>

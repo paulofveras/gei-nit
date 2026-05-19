@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useAuth } from "@/lib/auth-context";
 import { demandas as demandasIniciais, Demanda, Prioridade, DemandaStatus } from "@/lib/mock-data";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,6 +41,7 @@ const STATUS_LABEL: Record<DemandaStatus, string> = {
 };
 
 export default function DemandasPage() {
+  const { user } = useAuth();
   const [demandas, setDemandas] = useState<Demanda[]>(demandasIniciais);
   const [expandido, setExpandido] = useState<string | null>(null);
   const [mostraForm, setMostraForm] = useState(false);
@@ -49,6 +51,7 @@ export default function DemandasPage() {
     empresa: "",
     cnpj: "",
     contato: "",
+    areaCNPq: "",
     descricao: "",
     prioridade: "media" as Prioridade,
     prazoResposta: "",
@@ -62,6 +65,7 @@ export default function DemandasPage() {
       empresa: form.empresa,
       cnpj: form.cnpj,
       contato: form.contato,
+      areaCNPq: form.areaCNPq || undefined,
       descricao: form.descricao,
       prioridade: form.prioridade,
       prazoResposta: form.prazoResposta,
@@ -70,7 +74,7 @@ export default function DemandasPage() {
       flagSigilo: form.flagSigilo,
     };
     setDemandas((prev) => [nova, ...prev]);
-    setForm({ empresa: "", cnpj: "", contato: "", descricao: "", prioridade: "media", prazoResposta: "", flagSigilo: false });
+    setForm({ empresa: "", cnpj: "", contato: "", areaCNPq: "", descricao: "", prioridade: "media", prazoResposta: "", flagSigilo: false });
     setMostraForm(false);
   }
 
@@ -87,12 +91,14 @@ export default function DemandasPage() {
           <h1 className="text-[22px] font-semibold tracking-tight text-zinc-900">Demandas Externas</h1>
           <p className="text-zinc-400 text-sm mt-0.5">{demandas.length} demandas registradas</p>
         </div>
-        <Button
-          onClick={() => setMostraForm((v) => !v)}
-          className="gap-2 bg-blue-600 hover:bg-blue-500 text-white shadow-sm shadow-blue-500/30"
-        >
-          <Plus className="h-4 w-4" /> Nova Demanda
-        </Button>
+        {user?.perfil === "admin_NIT" && (
+          <Button
+            onClick={() => setMostraForm((v) => !v)}
+            className="gap-2 bg-blue-600 hover:bg-blue-500 text-white shadow-sm shadow-blue-500/30"
+          >
+            <Plus className="h-4 w-4" /> Nova Demanda
+          </Button>
+        )}
       </motion.div>
 
       {/* Form */}
@@ -127,13 +133,23 @@ export default function DemandasPage() {
                   </div>
                 </div>
 
-                <div className="space-y-1.5">
-                  <Label>E-mail / Contato</Label>
-                  <Input
-                    value={form.contato}
-                    onChange={(e) => setForm((f) => ({ ...f, contato: e.target.value }))}
-                    placeholder="contato@empresa.com.br"
-                  />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label>E-mail / Contato</Label>
+                    <Input
+                      value={form.contato}
+                      onChange={(e) => setForm((f) => ({ ...f, contato: e.target.value }))}
+                      placeholder="contato@empresa.com.br"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Área CNPq</Label>
+                    <Input
+                      value={form.areaCNPq}
+                      onChange={(e) => setForm((f) => ({ ...f, areaCNPq: e.target.value }))}
+                      placeholder="Ex: Agronomia, Medicina..."
+                    />
+                  </div>
                 </div>
 
                 <div className="space-y-1.5">
@@ -232,6 +248,11 @@ export default function DemandasPage() {
                       <span className={cn("text-[11px] rounded-full px-2 py-0.5 font-medium", STATUS_STYLE[d.status])}>
                         {STATUS_LABEL[d.status]}
                       </span>
+                      {d.areaCNPq && (
+                        <span className="text-[11px] rounded-full bg-zinc-100 px-2 py-0.5 font-medium text-zinc-600">
+                          CNPq · {d.areaCNPq}
+                        </span>
+                      )}
                       <span className="flex items-center gap-1 text-[11px] text-zinc-400">
                         <Calendar className="h-3 w-3" />
                         {d.prazoResposta || "—"}

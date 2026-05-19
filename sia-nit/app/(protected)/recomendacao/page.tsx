@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useMemo, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { demandas, recomendacoesMock, Recomendacao, Demanda } from "@/lib/mock-data";
+import { useAuth } from "@/lib/auth-context";
+import { demandas, recomendacoesMock, pesquisadores, Recomendacao } from "@/lib/mock-data";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -33,6 +34,11 @@ import {
   Info,
   Filter,
   CheckCircle2,
+  History,
+  ChevronDown,
+  ShieldCheck,
+  ShieldAlert,
+  Users,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -104,8 +110,32 @@ function LoadingPipeline() {
   );
 }
 
+interface HistoricoEntry {
+  id: number;
+  demandaId: string;
+  empresa: string;
+  timestamp: string;
+  resultados: Recomendacao[];
+}
+
+function iniciais(nome: string) {
+  const partes = nome
+    .split(/\s+/)
+    .filter((p) => p.length >= 2 && !/^(Dr|Dra|MSc|MS|Ph|D|Prof|Profa|Eng|Engª|Enfª|Enf)\.?$/i.test(p));
+  return partes
+    .slice(0, 2)
+    .map((p) => p[0])
+    .join("")
+    .toUpperCase();
+}
+
+function equipeDoProjeto(projetoId: string) {
+  return pesquisadores.filter((p) => p.ativo && p.projetos.includes(projetoId));
+}
+
 function RecomendacaoContent() {
   const params = useSearchParams();
+  const { user } = useAuth();
   const initialId = params.get("demanda") ?? demandas[0].id;
 
   const [selectedDemandaId, setSelectedDemandaId] = useState(initialId);
@@ -114,19 +144,56 @@ function RecomendacaoContent() {
   const [feedbackModal, setFeedbackModal] = useState<{ idx: number; tipo: "util" | "nao_util" } | null>(null);
   const [feedbackTexto, setFeedbackTexto] = useState("");
   const [feedbackSalvo, setFeedbackSalvo] = useState<Record<number, { tipo: string; comentario: string }>>({});
+  const [historico, setHistorico] = useState<HistoricoEntry[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      return JSON.parse(localStorage.getItem("sia_historico") ?? "[]");
+    } catch {
+      return [];
+    }
+  });
+  const [historicoOpen, setHistoricoOpen] = useState(false);
 
   const demandaSelecionada = demandas.find((d) => d.id === selectedDemandaId) ?? demandas[0];
 
-  useEffect(() => {
-    setResultados(null);
+  const visibleResultados = useMemo(() => {
+    if (!resultados) return null;
+    if (user?.perfil === "admin_NIT") return resultados;
+    return resultados.filter((r) => r.projeto.nivelSigilo !== "confidencial");
+  }, [resultados, user]);
+
+  const ocultosPorSigilo =
+    resultados && user?.perfil !== "admin_NIT"
+      ? resultados.filter((r) => r.projeto.nivelSigilo === "confidencial").length
+      : 0;
+
+  function rever(entry: HistoricoEntry) {
+    setSelectedDemandaId(entry.demandaId);
+    setResultados(entry.resultados);
     setFeedbackSalvo({});
-  }, [selectedDemandaId]);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function salvarHistorico(recs: Recomendacao[]) {
+    const entrada: HistoricoEntry = {
+      id: Date.now(),
+      demandaId: selectedDemandaId,
+      empresa: demandaSelecionada.empresa,
+      timestamp: new Date().toISOString(),
+      resultados: recs,
+    };
+    const novo = [entrada, ...historico].slice(0, 20);
+    setHistorico(novo);
+    localStorage.setItem("sia_historico", JSON.stringify(novo));
+  }
 
   async function gerarRecomendacao() {
     setLoading(true);
     setResultados(null);
     await new Promise((r) => setTimeout(r, 1800));
-    setResultados(recomendacoesMock[selectedDemandaId] ?? []);
+    const recs = recomendacoesMock[selectedDemandaId] ?? [];
+    setResultados(recs);
+    salvarHistorico(recs);
     setLoading(false);
   }
 
@@ -173,7 +240,7 @@ function RecomendacaoContent() {
               <Building2 className="h-4.5 w-4.5 text-zinc-400 shrink-0 mt-2.5" />
               <div className="flex-1 space-y-1.5">
                 <label className="text-[13px] font-medium text-zinc-700">Selecionar Demanda</label>
-                <Select value={selectedDemandaId} onValueChange={(v) => v && setSelectedDemandaId(v)}>
+                <Select value={selectedDemandaId} onValueChange={(v) => { if (v) { setSelectedDemandaId(v); setResultados(null); setFeedbackSalvo({}); } }}>
                   <SelectTrigger className="bg-zinc-50 border-zinc-200 text-[13px] w-full">
                     <span className="flex-1 text-left truncate text-zinc-900">
                       {demandaSelecionada.empresa}
@@ -198,6 +265,11 @@ function RecomendacaoContent() {
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="font-medium text-zinc-900 text-[13px]">{demandaSelecionada.empresa}</span>
                 <PrioridadeBadge p={demandaSelecionada.prioridade} />
+                {demandaSelecionada.areaCNPq && (
+                  <span className="text-[11px] rounded-full bg-zinc-200 px-2 py-0.5 font-medium text-zinc-600">
+                    CNPq · {demandaSelecionada.areaCNPq}
+                  </span>
+                )}
               </div>
               <p className="text-[13px] text-zinc-600 leading-relaxed">{demandaSelecionada.descricao}</p>
               <div className="flex items-center gap-1.5 text-xs text-zinc-400">
@@ -240,7 +312,7 @@ function RecomendacaoContent() {
 
       {/* Results */}
       <AnimatePresence>
-        {resultados !== null && (
+        {resultados !== null && visibleResultados !== null && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -248,17 +320,22 @@ function RecomendacaoContent() {
             className="space-y-5"
           >
             <motion.div
-              className="flex items-center gap-2"
+              className="flex items-center gap-2 flex-wrap"
               initial={{ opacity: 0, x: -8 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.3 }}
             >
               <Trophy className="h-5 w-5 text-amber-500" />
               <h2 className="font-semibold text-[15px] text-zinc-900">
-                {resultados.length > 0
-                  ? `${resultados.length} projeto${resultados.length > 1 ? "s" : ""} recomendado${resultados.length > 1 ? "s" : ""}`
+                {visibleResultados.length > 0
+                  ? `${visibleResultados.length} projeto${visibleResultados.length > 1 ? "s" : ""} recomendado${visibleResultados.length > 1 ? "s" : ""}`
                   : "Nenhum projeto encontrado para esta demanda."}
               </h2>
+              {ocultosPorSigilo > 0 && (
+                <span className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5 font-medium">
+                  {ocultosPorSigilo} oculto{ocultosPorSigilo > 1 ? "s" : ""} por sigilo · perfil consultor
+                </span>
+              )}
             </motion.div>
 
             <motion.div
@@ -267,7 +344,7 @@ function RecomendacaoContent() {
               initial="initial"
               animate="animate"
             >
-              {resultados.map((rec, idx) => (
+              {visibleResultados.map((rec, idx) => (
                 <motion.div
                   key={rec.projeto.id}
                   variants={staggerItem}
@@ -347,6 +424,9 @@ function RecomendacaoContent() {
                         <p className="text-[13px] text-zinc-700 leading-[1.75]">{rec.justificativaIA}</p>
                       </div>
 
+                      {/* Equipe disponível */}
+                      <EquipeDisponivel projetoId={rec.projeto.id} />
+
                       {/* Feedback */}
                       <div className="flex items-center gap-2 pt-1">
                         <span className="text-xs text-zinc-400">Útil?</span>
@@ -384,7 +464,7 @@ function RecomendacaoContent() {
               ))}
             </motion.div>
 
-            {resultados.length === 0 && (
+            {visibleResultados.length === 0 && (
               <Card className="border-zinc-200/60 rounded-2xl">
                 <CardContent className="py-14 text-center">
                   <p className="text-zinc-400 text-[13px]">
@@ -399,6 +479,77 @@ function RecomendacaoContent() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Histórico de Recomendações */}
+      {historico.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+          className="rounded-2xl border border-zinc-200/60 bg-white shadow-sm overflow-hidden"
+        >
+          <button
+            onClick={() => setHistoricoOpen((v) => !v)}
+            className="w-full flex items-center gap-3 px-5 py-4 text-left hover:bg-zinc-50/50 transition-colors"
+          >
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-zinc-100 shrink-0">
+              <History className="h-3.5 w-3.5 text-zinc-500" />
+            </div>
+            <span className="font-medium text-[13px] text-zinc-900 flex-1">
+              Histórico de Recomendações
+            </span>
+            <span className="text-[11px] text-zinc-400 bg-zinc-100 rounded-full px-2 py-0.5 font-mono">
+              {historico.length}
+            </span>
+            <motion.div animate={{ rotate: historicoOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
+              <ChevronDown className="h-4 w-4 text-zinc-400" />
+            </motion.div>
+          </button>
+
+          <AnimatePresence>
+            {historicoOpen && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.22, ease: "easeOut" }}
+                className="overflow-hidden"
+              >
+                <div className="border-t border-zinc-100 divide-y divide-zinc-100">
+                  {historico.slice(0, 10).map((entry) => (
+                    <div key={entry.id} className="flex items-center gap-3 px-5 py-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[12px] font-medium text-zinc-800 truncate">
+                          {entry.empresa}
+                        </p>
+                        <p className="text-[11px] text-zinc-400 mt-0.5">
+                          {new Date(entry.timestamp).toLocaleString("pt-BR", {
+                            day: "2-digit",
+                            month: "2-digit",
+                            year: "2-digit",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                          {" · "}
+                          {entry.resultados.length} projeto{entry.resultados.length !== 1 ? "s" : ""}
+                        </p>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => rever(entry)}
+                        className="h-7 text-[11px] text-blue-600 hover:bg-blue-50 hover:text-blue-700 rounded-lg px-2.5 shrink-0"
+                      >
+                        Rever
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </motion.div>
+      )}
 
       {/* Feedback Modal */}
       <Dialog
@@ -433,6 +584,64 @@ function RecomendacaoContent() {
           </div>
         </DialogContent>
       </Dialog>
+    </div>
+  );
+}
+
+function EquipeDisponivel({ projetoId }: { projetoId: string }) {
+  const equipe = equipeDoProjeto(projetoId);
+  if (equipe.length === 0) {
+    return (
+      <div className="rounded-xl bg-zinc-50 border border-zinc-200/60 p-3 flex items-center gap-2.5">
+        <Users className="h-3.5 w-3.5 text-zinc-400 shrink-0" />
+        <p className="text-[11px] text-zinc-400">
+          Nenhum pesquisador ativo vinculado a este projeto.
+        </p>
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-xl bg-white border border-blue-100 p-3.5 space-y-2.5">
+      <div className="flex items-center gap-2">
+        <Users className="h-3.5 w-3.5 text-blue-500" />
+        <span className="text-[11px] text-blue-600 font-semibold uppercase tracking-wider">
+          Equipe disponível · {equipe.length} pesquisador{equipe.length > 1 ? "es" : ""}
+        </span>
+      </div>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        {equipe.map((p) => (
+          <div key={p.id} className="flex items-center gap-1.5" title={p.nome}>
+            <div
+              className={cn(
+                "flex h-7 w-7 items-center justify-center rounded-full text-[10px] font-semibold",
+                p.consentimento_lgpd
+                  ? "bg-blue-100 text-blue-700"
+                  : "bg-zinc-100 text-zinc-500"
+              )}
+            >
+              {iniciais(p.nome)}
+            </div>
+            <div className="flex flex-col leading-tight">
+              <span className="text-[11px] font-medium text-zinc-700 truncate max-w-32">
+                {p.nome.replace(/^(Dr|Dra|MSc|Prof|Profa|Eng|Engª|Enfª|Enf)\.?\s+/i, "")}
+              </span>
+              <span
+                className={cn(
+                  "inline-flex items-center gap-0.5 text-[9px] font-medium",
+                  p.consentimento_lgpd ? "text-emerald-600" : "text-amber-600"
+                )}
+              >
+                {p.consentimento_lgpd ? (
+                  <ShieldCheck className="h-2.5 w-2.5" />
+                ) : (
+                  <ShieldAlert className="h-2.5 w-2.5" />
+                )}
+                {p.consentimento_lgpd ? "LGPD ok" : "LGPD pendente"}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
